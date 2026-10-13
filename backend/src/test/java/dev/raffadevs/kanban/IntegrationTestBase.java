@@ -1,6 +1,12 @@
 package dev.raffadevs.kanban;
 
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -15,6 +21,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * abaixo inicia o container uma única vez por JVM e deixa o Ryuk (reaper do
  * Testcontainers) encerrá-lo ao final da execução.
  */
+@Import(IntegrationTestBase.TestRestTemplateConfig.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class IntegrationTestBase {
 
@@ -32,5 +39,22 @@ public abstract class IntegrationTestBase {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+    }
+
+    /**
+     * O cliente HTTP padrão do TestRestTemplate (baseado em HttpURLConnection
+     * do JDK) não suporta o método PATCH e falha com "cannot retry due to
+     * server authentication, in streaming mode" ao receber um 401 em uma
+     * requisição POST com corpo. Trocamos para o Apache HttpClient 5, que não
+     * tem nenhuma dessas limitações.
+     */
+    @TestConfiguration
+    static class TestRestTemplateConfig {
+
+        @Bean
+        RestTemplateBuilder restTemplateBuilder() {
+            return new RestTemplateBuilder()
+                    .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(HttpClients.createDefault()));
+        }
     }
 }
